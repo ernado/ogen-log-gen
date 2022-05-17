@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "$ref": "#/$defs/Entry",
+  "title": "Log entry",
+  "$defs": {
+    "Scalar": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "Map": {
+      "additionalProperties": {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "$ref": "#/$defs/Scalar"
+      },
+      "type": "object"
+    },
+    "Full": {
+      "additionalProperties": false,
+      "required": [
+        "Body"
+      ],
+      "properties": {
+        "Timestamp": {
+          "type": "string",
+          "format": "int64",
+          "title": "Timestamp, uint64 nanoseconds since Unix epoch.",
+          "description": "Time when the event occurred measured by the origin clock. This field is optional, it may be missing if the timestamp is unknown."
+        },
+        "SeverityNumber": {
+          "type": "integer",
+          "title": "Numerical value of the severity, normalized to values described in this document.",
+          "description": "SeverityNumber is an integer number. Smaller numerical values correspond to less severe events (such as debug events), larger numerical values correspond to more severe events (such as errors and critical events).",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "TraceId": {
+          "type": "string",
+          "title": "Request trace id.",
+          "description": "Request trace id as defined in W3C Trace Context. Can be set for logs that are part of request processing and have an assigned trace id."
+        },
+        "SpanId": {
+          "type": "string",
+          "title": "Span id",
+          "description": "Can be set for logs that are part of a particular processing span. If SpanId is present TraceId SHOULD be also present."
+        },
+        "Resource": {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "$ref": "#/$defs/Map"
+        },
+        "Attributes": {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "$ref": "#/$defs/Map"
+        },
+        "Body": {
+          "type": "string"
+        },
+        "SeverityText": {
+          "title": "Severity text (also known as log level).",
+          "description": "The original string representation of the severity as it is known at the source. If this field is missing and SeverityNumber is present then the short name that corresponds to the SeverityNumber may be used as a substitution.",
+          "type": "string",
+          "enum": [
+            "TRACE",
+            "DEBUG",
+            "INFO",
+            "WARN",
+            "ERROR",
+            "FATAL"
+          ]
+        }
+      }
+    },
+    "Light": {
+      "additionalProperties": {
+        "description": "Attributes of log event",
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "$ref": "#/$defs/Scalar"
+      },
+      "required": [
+        "level",
+        "msg",
+        "ts"
+      ],
+      "properties": {
+        "msg": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "number",
+          "format": "double",
+          "title": "Timestamp, seconds from unix epoch, like 1651867342.0920453"
+        },
+        "trace_id": {
+          "type": "string",
+          "title": "Request trace id, lowercase hex, 16 bytes",
+          "description": "Request trace id as defined in W3C Trace Context. Can be set for logs that are part of request processing and have an assigned trace id"
+        },
+        "span_id": {
+          "type": "string",
+          "title": "Span id, lowercase hex, 8 bytes",
+          "description": "Can be set for logs that are part of a particular processing span. If span_id is present trace_id SHOULD be also present"
+        },
+        "level": {
+          "title": "Log level",
+          "type": "string",
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "fatal"
+          ]
+        }
+      }
+    },
+    "Entry": {
+      "required": [
+        "full",
+        "light"
+      ],
+      "properties": {
+        "full": {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "$ref": "#/$defs/Full"
+        },
+        "light": {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "$ref": "#/$defs/Light"
+        }
+      }
+    }
+  }
+}
