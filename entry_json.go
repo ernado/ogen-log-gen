@@ -3,18 +3,453 @@
 package ogen_log_gen
 
 import (
+	"math/bits"
+	"strconv"
+
 	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
+
+	"github.com/ogen-go/ogen/json"
+	"github.com/ogen-go/ogen/validate"
 )
 
-type Entry jx.Raw
+// Ref: #/$defs/Entry
+type Entry struct {
+	Full  Full  "json:\"full\""
+	Light Light "json:\"light\""
+}
 
-// Encode encodes Entry as json.
-func (s Entry) Encode(e *jx.Encoder) {
-	unwrapped := jx.Raw(s)
-	if len(unwrapped) != 0 {
-		e.Raw(unwrapped)
+// Ref: #/$defs/Full
+type Full struct {
+	// Time when the event occurred measured by the origin clock. This field is optional, it may be
+	// missing if the timestamp is unknown.
+	Timestamp OptStringInt64 "json:\"Timestamp\""
+	// SeverityNumber is an integer number. Smaller numerical values correspond to less severe events
+	// (such as debug events), larger numerical values correspond to more severe events (such as errors
+	// and critical events).
+	SeverityNumber OptInt "json:\"SeverityNumber\""
+	// Request trace id as defined in W3C Trace Context. Can be set for logs that are part of request
+	// processing and have an assigned trace id.
+	TraceId OptString "json:\"TraceId\""
+	// Can be set for logs that are part of a particular processing span. If SpanId is present TraceId
+	// SHOULD be also present.
+	SpanId     OptString "json:\"SpanId\""
+	Resource   OptMap    "json:\"Resource\""
+	Attributes OptMap    "json:\"Attributes\""
+	Body       string    "json:\"Body\""
+	// The original string representation of the severity as it is known at the source. If this field is
+	// missing and SeverityNumber is present then the short name that corresponds to the SeverityNumber
+	// may be used as a substitution.
+	SeverityText OptFullSeverityText "json:\"SeverityText\""
+}
+
+// The original string representation of the severity as it is known at the source. If this field is
+// missing and SeverityNumber is present then the short name that corresponds to the SeverityNumber
+// may be used as a substitution.
+type FullSeverityText string
+
+const (
+	FullSeverityTextTRACE FullSeverityText = "TRACE"
+	FullSeverityTextDEBUG FullSeverityText = "DEBUG"
+	FullSeverityTextINFO  FullSeverityText = "INFO"
+	FullSeverityTextWARN  FullSeverityText = "WARN"
+	FullSeverityTextERROR FullSeverityText = "ERROR"
+	FullSeverityTextFATAL FullSeverityText = "FATAL"
+)
+
+// Ref: #/$defs/Light
+type Light struct {
+	Msg string  "json:\"msg\""
+	Ts  float64 "json:\"ts\""
+	// Request trace id as defined in W3C Trace Context. Can be set for logs that are part of request
+	// processing and have an assigned trace id.
+	TraceID OptString "json:\"trace_id\""
+	// Can be set for logs that are part of a particular processing span. If span_id is present trace_id
+	// SHOULD be also present.
+	SpanID          OptString  "json:\"span_id\""
+	Level           LightLevel "json:\"level\""
+	AdditionalProps LightAdditional
+}
+
+type LightAdditional map[string]Scalar
+
+func (s *LightAdditional) init() LightAdditional {
+	m := *s
+	if m == nil {
+		m = map[string]Scalar{}
+		*s = m
 	}
+	return m
+}
+
+type LightLevel string
+
+const (
+	LightLevelTrace LightLevel = "trace"
+	LightLevelDebug LightLevel = "debug"
+	LightLevelInfo  LightLevel = "info"
+	LightLevelWarn  LightLevel = "warn"
+	LightLevelError LightLevel = "error"
+	LightLevelFatal LightLevel = "fatal"
+)
+
+// Ref: #/$defs/Map
+type Map map[string]Scalar
+
+func (s *Map) init() Map {
+	m := *s
+	if m == nil {
+		m = map[string]Scalar{}
+		*s = m
+	}
+	return m
+}
+
+// NewOptFullSeverityText returns new OptFullSeverityText with value set to v.
+func NewOptFullSeverityText(v FullSeverityText) OptFullSeverityText {
+	return OptFullSeverityText{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptFullSeverityText is optional FullSeverityText.
+type OptFullSeverityText struct {
+	Value FullSeverityText
+	Set   bool
+}
+
+// IsSet returns true if OptFullSeverityText was set.
+func (o OptFullSeverityText) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptFullSeverityText) Reset() {
+	var v FullSeverityText
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptFullSeverityText) SetTo(v FullSeverityText) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptFullSeverityText) Get() (v FullSeverityText, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptFullSeverityText) Or(d FullSeverityText) FullSeverityText {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptInt returns new OptInt with value set to v.
+func NewOptInt(v int) OptInt {
+	return OptInt{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInt is optional int.
+type OptInt struct {
+	Value int
+	Set   bool
+}
+
+// IsSet returns true if OptInt was set.
+func (o OptInt) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInt) Reset() {
+	var v int
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInt) SetTo(v int) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInt) Get() (v int, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInt) Or(d int) int {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptMap returns new OptMap with value set to v.
+func NewOptMap(v Map) OptMap {
+	return OptMap{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptMap is optional Map.
+type OptMap struct {
+	Value Map
+	Set   bool
+}
+
+// IsSet returns true if OptMap was set.
+func (o OptMap) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptMap) Reset() {
+	var v Map
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptMap) SetTo(v Map) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptMap) Get() (v Map, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptMap) Or(d Map) Map {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptString returns new OptString with value set to v.
+func NewOptString(v string) OptString {
+	return OptString{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptString is optional string.
+type OptString struct {
+	Value string
+	Set   bool
+}
+
+// IsSet returns true if OptString was set.
+func (o OptString) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptString) Reset() {
+	var v string
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptString) SetTo(v string) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptString) Get() (v string, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptString) Or(d string) string {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptStringInt64 returns new OptStringInt64 with value set to v.
+func NewOptStringInt64(v int64) OptStringInt64 {
+	return OptStringInt64{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptStringInt64 is optional int64.
+type OptStringInt64 struct {
+	Value int64
+	Set   bool
+}
+
+// IsSet returns true if OptStringInt64 was set.
+func (o OptStringInt64) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptStringInt64) Reset() {
+	var v int64
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptStringInt64) SetTo(v int64) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptStringInt64) Get() (v int64, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptStringInt64) Or(d int64) int64 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// Ref: #/$defs/Scalar
+// Scalar represents sum type.
+type Scalar struct {
+	Type    ScalarType // switch on this field
+	String  string
+	Float64 float64
+	Bool    bool
+}
+
+// ScalarType is oneOf type of Scalar.
+type ScalarType string
+
+// Possible values for ScalarType.
+const (
+	StringScalar  ScalarType = "string"
+	Float64Scalar ScalarType = "float64"
+	BoolScalar    ScalarType = "bool"
+)
+
+// IsString reports whether Scalar is string.
+func (s Scalar) IsString() bool { return s.Type == StringScalar }
+
+// IsFloat64 reports whether Scalar is float64.
+func (s Scalar) IsFloat64() bool { return s.Type == Float64Scalar }
+
+// IsBool reports whether Scalar is bool.
+func (s Scalar) IsBool() bool { return s.Type == BoolScalar }
+
+// SetString sets Scalar to string.
+func (s *Scalar) SetString(v string) {
+	s.Type = StringScalar
+	s.String = v
+}
+
+// GetString returns string and true boolean if Scalar is string.
+func (s Scalar) GetString() (v string, ok bool) {
+	if !s.IsString() {
+		return v, false
+	}
+	return s.String, true
+}
+
+// NewStringScalar returns new Scalar from string.
+func NewStringScalar(v string) Scalar {
+	var s Scalar
+	s.SetString(v)
+	return s
+}
+
+// SetFloat64 sets Scalar to float64.
+func (s *Scalar) SetFloat64(v float64) {
+	s.Type = Float64Scalar
+	s.Float64 = v
+}
+
+// GetFloat64 returns float64 and true boolean if Scalar is float64.
+func (s Scalar) GetFloat64() (v float64, ok bool) {
+	if !s.IsFloat64() {
+		return v, false
+	}
+	return s.Float64, true
+}
+
+// NewFloat64Scalar returns new Scalar from float64.
+func NewFloat64Scalar(v float64) Scalar {
+	var s Scalar
+	s.SetFloat64(v)
+	return s
+}
+
+// SetBool sets Scalar to bool.
+func (s *Scalar) SetBool(v bool) {
+	s.Type = BoolScalar
+	s.Bool = v
+}
+
+// GetBool returns bool and true boolean if Scalar is bool.
+func (s Scalar) GetBool() (v bool, ok bool) {
+	if !s.IsBool() {
+		return v, false
+	}
+	return s.Bool, true
+}
+
+// NewBoolScalar returns new Scalar from bool.
+func NewBoolScalar(v bool) Scalar {
+	var s Scalar
+	s.SetBool(v)
+	return s
+}
+
+// Encode implements json.Marshaler.
+func (s Entry) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s Entry) encodeFields(e *jx.Encoder) {
+	{
+
+		e.FieldStart("full")
+		s.Full.Encode(e)
+	}
+	{
+
+		e.FieldStart("light")
+		s.Light.Encode(e)
+	}
+}
+
+var jsonFieldsNameOfEntry = [2]string{
+	0: "full",
+	1: "light",
 }
 
 // Decode decodes Entry from json.
@@ -22,18 +457,70 @@ func (s *Entry) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode Entry to nil")
 	}
-	var unwrapped jx.Raw
-	if err := func() error {
-		v, err := d.RawAppend(nil)
-		unwrapped = jx.Raw(v)
-		if err != nil {
-			return err
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "full":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				if err := s.Full.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"full\"")
+			}
+		case "light":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				if err := s.Light.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"light\"")
+			}
+		default:
+			return d.Skip()
 		}
 		return nil
-	}(); err != nil {
-		return errors.Wrap(err, "alias")
+	}); err != nil {
+		return errors.Wrap(err, "decode Entry")
 	}
-	*s = Entry(unwrapped)
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000011,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfEntry) {
+					name = jsonFieldsNameOfEntry[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
 	return nil
 }
 
@@ -48,4 +535,1087 @@ func (s Entry) MarshalJSON() ([]byte, error) {
 func (s *Entry) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s Full) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s Full) encodeFields(e *jx.Encoder) {
+	{
+		if s.Timestamp.Set {
+			e.FieldStart("Timestamp")
+			s.Timestamp.Encode(e)
+		}
+	}
+	{
+		if s.SeverityNumber.Set {
+			e.FieldStart("SeverityNumber")
+			s.SeverityNumber.Encode(e)
+		}
+	}
+	{
+		if s.TraceId.Set {
+			e.FieldStart("TraceId")
+			s.TraceId.Encode(e)
+		}
+	}
+	{
+		if s.SpanId.Set {
+			e.FieldStart("SpanId")
+			s.SpanId.Encode(e)
+		}
+	}
+	{
+		if s.Resource.Set {
+			e.FieldStart("Resource")
+			s.Resource.Encode(e)
+		}
+	}
+	{
+		if s.Attributes.Set {
+			e.FieldStart("Attributes")
+			s.Attributes.Encode(e)
+		}
+	}
+	{
+
+		e.FieldStart("Body")
+		e.Str(s.Body)
+	}
+	{
+		if s.SeverityText.Set {
+			e.FieldStart("SeverityText")
+			s.SeverityText.Encode(e)
+		}
+	}
+}
+
+var jsonFieldsNameOfFull = [8]string{
+	0: "Timestamp",
+	1: "SeverityNumber",
+	2: "TraceId",
+	3: "SpanId",
+	4: "Resource",
+	5: "Attributes",
+	6: "Body",
+	7: "SeverityText",
+}
+
+// Decode decodes Full from json.
+func (s *Full) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode Full to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "Timestamp":
+			if err := func() error {
+				s.Timestamp.Reset()
+				if err := s.Timestamp.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"Timestamp\"")
+			}
+		case "SeverityNumber":
+			if err := func() error {
+				s.SeverityNumber.Reset()
+				if err := s.SeverityNumber.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"SeverityNumber\"")
+			}
+		case "TraceId":
+			if err := func() error {
+				s.TraceId.Reset()
+				if err := s.TraceId.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"TraceId\"")
+			}
+		case "SpanId":
+			if err := func() error {
+				s.SpanId.Reset()
+				if err := s.SpanId.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"SpanId\"")
+			}
+		case "Resource":
+			if err := func() error {
+				s.Resource.Reset()
+				if err := s.Resource.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"Resource\"")
+			}
+		case "Attributes":
+			if err := func() error {
+				s.Attributes.Reset()
+				if err := s.Attributes.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"Attributes\"")
+			}
+		case "Body":
+			requiredBitSet[0] |= 1 << 6
+			if err := func() error {
+				v, err := d.Str()
+				s.Body = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"Body\"")
+			}
+		case "SeverityText":
+			if err := func() error {
+				s.SeverityText.Reset()
+				if err := s.SeverityText.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"SeverityText\"")
+			}
+		default:
+			return errors.Errorf("unexpected field %q", k)
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode Full")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b01000000,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfFull) {
+					name = jsonFieldsNameOfFull[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s Full) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *Full) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes FullSeverityText as json.
+func (s FullSeverityText) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes FullSeverityText from json.
+func (s *FullSeverityText) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode FullSeverityText to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch FullSeverityText(v) {
+	case FullSeverityTextTRACE:
+		*s = FullSeverityTextTRACE
+	case FullSeverityTextDEBUG:
+		*s = FullSeverityTextDEBUG
+	case FullSeverityTextINFO:
+		*s = FullSeverityTextINFO
+	case FullSeverityTextWARN:
+		*s = FullSeverityTextWARN
+	case FullSeverityTextERROR:
+		*s = FullSeverityTextERROR
+	case FullSeverityTextFATAL:
+		*s = FullSeverityTextFATAL
+	default:
+		*s = FullSeverityText(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s FullSeverityText) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *FullSeverityText) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s Light) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s Light) encodeFields(e *jx.Encoder) {
+	{
+
+		e.FieldStart("msg")
+		e.Str(s.Msg)
+	}
+	{
+
+		e.FieldStart("ts")
+		e.Float64(s.Ts)
+	}
+	{
+		if s.TraceID.Set {
+			e.FieldStart("trace_id")
+			s.TraceID.Encode(e)
+		}
+	}
+	{
+		if s.SpanID.Set {
+			e.FieldStart("span_id")
+			s.SpanID.Encode(e)
+		}
+	}
+	{
+
+		e.FieldStart("level")
+		s.Level.Encode(e)
+	}
+	for k, elem := range s.AdditionalProps {
+		e.FieldStart(k)
+
+		elem.Encode(e)
+	}
+}
+
+var jsonFieldsNameOfLight = [5]string{
+	0: "msg",
+	1: "ts",
+	2: "trace_id",
+	3: "span_id",
+	4: "level",
+}
+
+// Decode decodes Light from json.
+func (s *Light) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode Light to nil")
+	}
+	var requiredBitSet [1]uint8
+	s.AdditionalProps = map[string]Scalar{}
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "msg":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.Msg = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"msg\"")
+			}
+		case "ts":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Float64()
+				s.Ts = float64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"ts\"")
+			}
+		case "trace_id":
+			if err := func() error {
+				s.TraceID.Reset()
+				if err := s.TraceID.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"trace_id\"")
+			}
+		case "span_id":
+			if err := func() error {
+				s.SpanID.Reset()
+				if err := s.SpanID.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"span_id\"")
+			}
+		case "level":
+			requiredBitSet[0] |= 1 << 4
+			if err := func() error {
+				if err := s.Level.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"level\"")
+			}
+		default:
+			var elem Scalar
+			if err := func() error {
+				if err := elem.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrapf(err, "decode field %q", k)
+			}
+			s.AdditionalProps[string(k)] = elem
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode Light")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00010011,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfLight) {
+					name = jsonFieldsNameOfLight[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s Light) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *Light) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s LightAdditional) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields implements json.Marshaler.
+func (s LightAdditional) encodeFields(e *jx.Encoder) {
+	for k, elem := range s {
+		e.FieldStart(k)
+
+		elem.Encode(e)
+	}
+}
+
+// Decode decodes LightAdditional from json.
+func (s *LightAdditional) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode LightAdditional to nil")
+	}
+	m := s.init()
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		var elem Scalar
+		if err := func() error {
+			if err := elem.Decode(d); err != nil {
+				return err
+			}
+			return nil
+		}(); err != nil {
+			return errors.Wrapf(err, "decode field %q", k)
+		}
+		m[string(k)] = elem
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode LightAdditional")
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s LightAdditional) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *LightAdditional) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes LightLevel as json.
+func (s LightLevel) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes LightLevel from json.
+func (s *LightLevel) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode LightLevel to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch LightLevel(v) {
+	case LightLevelTrace:
+		*s = LightLevelTrace
+	case LightLevelDebug:
+		*s = LightLevelDebug
+	case LightLevelInfo:
+		*s = LightLevelInfo
+	case LightLevelWarn:
+		*s = LightLevelWarn
+	case LightLevelError:
+		*s = LightLevelError
+	case LightLevelFatal:
+		*s = LightLevelFatal
+	default:
+		*s = LightLevel(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s LightLevel) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *LightLevel) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s Map) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields implements json.Marshaler.
+func (s Map) encodeFields(e *jx.Encoder) {
+	for k, elem := range s {
+		e.FieldStart(k)
+
+		elem.Encode(e)
+	}
+}
+
+// Decode decodes Map from json.
+func (s *Map) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode Map to nil")
+	}
+	m := s.init()
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		var elem Scalar
+		if err := func() error {
+			if err := elem.Decode(d); err != nil {
+				return err
+			}
+			return nil
+		}(); err != nil {
+			return errors.Wrapf(err, "decode field %q", k)
+		}
+		m[string(k)] = elem
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode Map")
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s Map) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *Map) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes FullSeverityText as json.
+func (o OptFullSeverityText) Encode(e *jx.Encoder) {
+	if !o.Set {
+		return
+	}
+	e.Str(string(o.Value))
+}
+
+// Decode decodes FullSeverityText from json.
+func (o *OptFullSeverityText) Decode(d *jx.Decoder) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptFullSeverityText to nil")
+	}
+	o.Set = true
+	if err := o.Value.Decode(d); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptFullSeverityText) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptFullSeverityText) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes int as json.
+func (o OptInt) Encode(e *jx.Encoder) {
+	if !o.Set {
+		return
+	}
+	e.Int(int(o.Value))
+}
+
+// Decode decodes int from json.
+func (o *OptInt) Decode(d *jx.Decoder) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptInt to nil")
+	}
+	o.Set = true
+	v, err := d.Int()
+	if err != nil {
+		return err
+	}
+	o.Value = int(v)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptInt) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptInt) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes Map as json.
+func (o OptMap) Encode(e *jx.Encoder) {
+	if !o.Set {
+		return
+	}
+	o.Value.Encode(e)
+}
+
+// Decode decodes Map from json.
+func (o *OptMap) Decode(d *jx.Decoder) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptMap to nil")
+	}
+	o.Set = true
+	o.Value = make(Map)
+	if err := o.Value.Decode(d); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptMap) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptMap) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes string as json.
+func (o OptString) Encode(e *jx.Encoder) {
+	if !o.Set {
+		return
+	}
+	e.Str(string(o.Value))
+}
+
+// Decode decodes string from json.
+func (o *OptString) Decode(d *jx.Decoder) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptString to nil")
+	}
+	o.Set = true
+	v, err := d.Str()
+	if err != nil {
+		return err
+	}
+	o.Value = string(v)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptString) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptString) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes int64 as json.
+func (o OptStringInt64) Encode(e *jx.Encoder) {
+	if !o.Set {
+		return
+	}
+	json.EncodeStringInt64(e, o.Value)
+}
+
+// Decode decodes int64 from json.
+func (o *OptStringInt64) Decode(d *jx.Decoder) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptStringInt64 to nil")
+	}
+	o.Set = true
+	v, err := json.DecodeStringInt64(d)
+	if err != nil {
+		return err
+	}
+	o.Value = v
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptStringInt64) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptStringInt64) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes Scalar as json.
+func (s Scalar) Encode(e *jx.Encoder) {
+	switch s.Type {
+	case StringScalar:
+		e.Str(s.String)
+	case Float64Scalar:
+		e.Float64(s.Float64)
+	case BoolScalar:
+		e.Bool(s.Bool)
+	}
+}
+
+// Decode decodes Scalar from json.
+func (s *Scalar) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode Scalar to nil")
+	}
+	// Sum type type_discriminator.
+	switch t := d.Next(); t {
+	case jx.String:
+		v, err := d.Str()
+		s.String = string(v)
+		if err != nil {
+			return err
+		}
+		s.Type = StringScalar
+	case jx.Number:
+		v, err := d.Float64()
+		s.Float64 = float64(v)
+		if err != nil {
+			return err
+		}
+		s.Type = Float64Scalar
+	case jx.Bool:
+		v, err := d.Bool()
+		s.Bool = bool(v)
+		if err != nil {
+			return err
+		}
+		s.Type = BoolScalar
+	default:
+		return errors.Errorf("unexpected json type %q", t)
+	}
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s Scalar) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *Scalar) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+func (s Entry) Validate() error {
+	var failures []validate.FieldError
+	if err := func() error {
+		if err := s.Full.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "full",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if err := s.Light.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "light",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+func (s Full) Validate() error {
+	var failures []validate.FieldError
+	if err := func() error {
+		if s.SeverityNumber.Set {
+			if err := func() error {
+				if err := (validate.Int{
+					MinSet:        true,
+					Min:           1,
+					MaxSet:        true,
+					Max:           24,
+					MinExclusive:  false,
+					MaxExclusive:  false,
+					MultipleOfSet: false,
+					MultipleOf:    0,
+				}).Validate(int64(s.SeverityNumber.Value)); err != nil {
+					return errors.Wrap(err, "int")
+				}
+				return nil
+			}(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "SeverityNumber",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if s.Resource.Set {
+			if err := func() error {
+				if err := s.Resource.Value.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "Resource",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if s.Attributes.Set {
+			if err := func() error {
+				if err := s.Attributes.Value.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "Attributes",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if s.SeverityText.Set {
+			if err := func() error {
+				if err := s.SeverityText.Value.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "SeverityText",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+func (s FullSeverityText) Validate() error {
+	switch s {
+	case "TRACE":
+		return nil
+	case "DEBUG":
+		return nil
+	case "INFO":
+		return nil
+	case "WARN":
+		return nil
+	case "ERROR":
+		return nil
+	case "FATAL":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
+}
+func (s Light) Validate() error {
+	var failures []validate.FieldError
+	if err := func() error {
+		if err := (validate.Float{}).Validate(float64(s.Ts)); err != nil {
+			return errors.Wrap(err, "float")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "ts",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if err := s.Level.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "level",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if err := s.AdditionalProps.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "AdditionalProps",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+func (s LightAdditional) Validate() error {
+	var failures []validate.FieldError
+	for key, elem := range s {
+		if err := func() error {
+			if err := elem.Validate(); err != nil {
+				return err
+			}
+			return nil
+		}(); err != nil {
+			failures = append(failures, validate.FieldError{
+				Name:  key,
+				Error: err,
+			})
+		}
+	}
+
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+func (s LightLevel) Validate() error {
+	switch s {
+	case "trace":
+		return nil
+	case "debug":
+		return nil
+	case "info":
+		return nil
+	case "warn":
+		return nil
+	case "error":
+		return nil
+	case "fatal":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
+}
+func (s Map) Validate() error {
+	var failures []validate.FieldError
+	for key, elem := range s {
+		if err := func() error {
+			if err := elem.Validate(); err != nil {
+				return err
+			}
+			return nil
+		}(); err != nil {
+			failures = append(failures, validate.FieldError{
+				Name:  key,
+				Error: err,
+			})
+		}
+	}
+
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s Scalar) Validate() error {
+	switch s.Type {
+	case StringScalar:
+		return nil // no validation needed
+	case Float64Scalar:
+		if err := (validate.Float{}).Validate(float64(s.Float64)); err != nil {
+			return errors.Wrap(err, "float")
+		}
+		return nil
+	case BoolScalar:
+		return nil // no validation needed
+	default:
+		return errors.Errorf("invalid type %q", s.Type)
+	}
 }

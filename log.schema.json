@@ -24,6 +24,7 @@
       "type": "object"
     },
     "Full": {
+      "type": "object",
       "additionalProperties": false,
       "required": [
         "Body"
@@ -79,6 +80,7 @@
       }
     },
     "Light": {
+      "type": "object",
       "additionalProperties": {
         "description": "Attributes of log event",
         "$schema": "http://json-schema.org/draft-04/schema#",
@@ -123,6 +125,7 @@
       }
     },
     "Entry": {
+      "type": "object",
       "required": [
         "full",
         "light"
